@@ -14,9 +14,13 @@ import random
 
 plpy.info('\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n')
 
-L = 2
+L = 3
 BUCKET_VALUE_IDX = 1
 SA_NAME = sa_name
+
+# *****************************************************************************************
+# Database preparation (create qi & sa tables, fetch column types)
+# *****************************************************************************************
 
 fetch_column_metadata_string = 'select column_name, column_default, is_nullable, data_type '\
                     'from information_schema.columns '\
@@ -86,6 +90,10 @@ if create_sa_table == True:
 
 rows = plpy.execute('select * from main_table')
 
+
+# *****************************************************************************************
+# Anatomizaton algorithm
+# *****************************************************************************************
 
 # 2. hash the tuples in T (rows) by their As (sensitive attr) values (each bucket per As value)
 buckets = {}
@@ -193,8 +201,13 @@ for group_number, tuples in QIgroups.items():
     sa_keys = sa_counts.keys()
     random.shuffle(sa_keys)
 
-    for sa in sa_keys: # {alsheimer, 1}
+    for sa in sa_keys:
         list_of_sa.append([group_number, sa, sa_counts[sa]])
+
+
+# *****************************************************************************************
+# Data insertion part
+# *****************************************************************************************
 
 
 sql_insert_qi_attrs_string_base = 'insert into ' + qi_table_name + '(group_id, '
