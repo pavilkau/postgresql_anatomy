@@ -66,4 +66,5 @@ for row in list_of_sa:
 $$
 LANGUAGE plpythonu;
 
-select mainfunc('main_table', 'disease', '{"*"}', 2);
+# select mainfunc('main_table', 'disease', '{"*"}', 2);
+# select mainfunc('bank_churners', 'income_category', '{"*"}', 3);
