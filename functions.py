@@ -122,13 +122,16 @@ def create_qi_groups(buckets, l_level):
         QIgroups[group_count] = []
 
         #5. S = the set of l largest buckets; 6. for each bucket in S
+        # Instead of assigning l largest buckets to variable S
+        # buckets dictionary is iterated l times
         for i, key in enumerate(buckets, start=1):
             if i > l_level:
                 break
 
             # 7. remove an arbitrary tuple t from the bucket; 8. QIgcnt = QIgcnt ∪ {t}
-            QIgroups[group_count].append(buckets[key][0])
-            del buckets[key][0]
+            random_tuple_idx = random.randrange(len(buckets[key]))
+            QIgroups[group_count].append(buckets[key][random_tuple_idx])
+            del buckets[key][random_tuple_idx]
 
             if len(buckets[key]) < 1:
                 buckets.pop(key)
@@ -144,6 +147,7 @@ GD["create_qi_groups"] = create_qi_groups
 
 def assign_residue_tuples(QIgroups, buckets, sa_name):
     plpy.info('procesing residue assign')
+
     while len(buckets) > 0:
         for key, residue_tuples in buckets.items():
 
