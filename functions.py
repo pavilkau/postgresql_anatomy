@@ -5,6 +5,77 @@ import random
 
 BUCKET_VALUE_IDX = 1
 
+
+# select distinct(income_category), count(income_category) from bank_churners group by income_category;
+# delete from bank_churners where id in (select id from bank_churners where income_category='Less than $40K' limit 20);
+
+def fetch_table_size(table_name):
+    fetch_table_size_string = 'select count(*) from {}'.format(table_name)
+    return plpy.execute(fetch_table_size_string)[0]['count']
+
+GD['fetch_table_size'] = fetch_table_size
+
+
+
+def fetch_sa_distribution(table_name, sa_column_name):
+    fetch_sa_distribution_string = 'select distinct({column_name}), '\
+                        'count({column_name}) from {table_name} '\
+                        'group by {column_name}'.format(column_name=sa_column_name, table_name=table_name)
+
+    sa_distribution_object = plpy.execute(fetch_sa_distribution_string)
+
+    sa_distribution = {}
+    for row in sa_distribution_object:
+        sa_distribution[row[sa_column_name]] = row['count']
+
+    return sa_distribution
+
+GD['fetch_sa_distribution'] = fetch_sa_distribution
+
+
+
+def calculate_data_loss(l_level, dataset_size, sa_distribution):
+    data_loss_sum = 0
+    sa_delta_totals = {}
+
+    while True:
+        max_possible_sa = dataset_size // l_level
+        overpopulated_sa = { k: v for (k, v) in sa_distribution.items() if v > max_possible_sa }
+
+        if len(overpopulated_sa) == 0:
+            break
+
+        sa_overpopulation_delta = { k: v - max_possible_sa for (k, v) in overpopulated_sa.items() }
+
+        for k, v in sa_overpopulation_delta.items():
+            if k in sa_delta_totals:
+                sa_delta_totals[k] += v
+            else:
+                sa_delta_totals[k] = v
+
+        for k, v in sa_distribution.items():
+            if k in overpopulated_sa:
+                sa_distribution[k] = v - sa_overpopulation_delta[k]
+            else:
+                sa_distribution[k] = v
+
+        data_loss = sum(sa_overpopulation_delta.values())
+        data_loss_sum += data_loss
+        dataset_size -= data_loss
+
+    return data_loss_sum, sa_delta_totals
+
+GD["calculate_data_loss"] = calculate_data_loss
+
+
+
+def supress_dataset(table_name, sa_column_name, sa_deltas):
+
+
+GD["supress_dataset"] = supress_dataset
+
+
+
 def fetch_column_metadata(schema, table_name, sa_name, specified_qi_columns):
     plpy.info('fetching metadata')
 
@@ -29,7 +100,7 @@ def fetch_column_metadata(schema, table_name, sa_name, specified_qi_columns):
             qi_column_metadata[column_name] = row
 
 
-    # If qi columns specified, remove them from metadata dict
+    # If qi columns specified, keep only the specified ones
     if specified_qi_columns != ['*']:
         for column_name in qi_column_metadata.keys():
             if not column_name in specified_qi_columns:
@@ -38,6 +109,7 @@ def fetch_column_metadata(schema, table_name, sa_name, specified_qi_columns):
     return qi_column_metadata, sa_metadata
 
 GD["fetch_column_metadata"] = fetch_column_metadata
+
 
 
 def create_qi_table(table_name, column_names, column_metadata):
@@ -67,6 +139,7 @@ def create_qi_table(table_name, column_names, column_metadata):
 GD["create_qi_table"] = create_qi_table
 
 
+
 def create_sa_table(table_name, column_name, column_metadata):
     plpy.info('creating sa table')
 
@@ -82,10 +155,12 @@ def create_sa_table(table_name, column_name, column_metadata):
 GD["create_sa_table"] = create_sa_table
 
 
+
 def hash_tuples_into_buckets(data, sa_name):
     # 2. hash the tuples in T (rows) by their As (sensitive attr) values (each bucket per As value)
     plpy.info('hashing_tuples')
 
+    # buckets is a dictionary with SA values as keys
     buckets = {}
 
     for row in data:
@@ -99,6 +174,7 @@ def hash_tuples_into_buckets(data, sa_name):
     return buckets
 
 GD["hash_tuples_into_buckets"] = hash_tuples_into_buckets
+
 
 
 def create_qi_groups(buckets, l_level):
@@ -145,6 +221,7 @@ def create_qi_groups(buckets, l_level):
 GD["create_qi_groups"] = create_qi_groups
 
 
+
 def assign_residue_tuples(QIgroups, buckets, sa_name):
     plpy.info('procesing residue assign')
 
@@ -188,6 +265,7 @@ def assign_residue_tuples(QIgroups, buckets, sa_name):
 GD["assign_residue_tuples"] = assign_residue_tuples
 
 
+
 def anatomize(QIgroups, qi_column_names, sa_name):
     plpy.info('splitting qigroups into qi and sa lists')
 
@@ -223,6 +301,7 @@ def anatomize(QIgroups, qi_column_names, sa_name):
 GD["anatomize"] = anatomize
 
 
+
 def qi_insertion_template(table_name, column_metadata, column_names):
     plpy.info('generating qi insertion template')
 
@@ -248,6 +327,7 @@ def qi_insertion_template(table_name, column_metadata, column_names):
     return sql_insertion_template
 
 GD["qi_insertion_template"] = qi_insertion_template
+
 
 
 def sa_insertion_template(table_name, sa_column_metadata, sa_name):
