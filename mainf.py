@@ -12,31 +12,20 @@ CREATE or replace FUNCTION mainfunc(
 RETURNS void AS $$
 # Usage:
 # select mainfunc('main_table', 'disease', '{"*"}', 2);
-# select mainfunc('bank_churners', 'income_category', '{"*"}', 3);
+# select mainfunc('bank_churners', 'income_category', '{"*"}', 5);
 
-plpy.info('\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n')
+plpy.info('\n\n\n\n')
 
-# *****************************************************************************************
-# Init functions
-# *****************************************************************************************
-plpy.execute('select _meta()')
 
 # *****************************************************************************************
-# Dataset eligibility check
+# L parameter eligibility check
 # *****************************************************************************************
 
-sa_distribution = GD['fetch_sa_distribution'](table_name, sa_column_name)
+sa_distribution = GD['fetch_sa_distribution'](table_name, sa_name)
 max_l = len(sa_distribution)
 if l_level > max_l:
-    plpy.error("Can't anatomize with this l_level. Max possible l = {}".format(max_l)
-
-dataset_size = GD['fetch_table_size'](table_name)
-max_l_without_loss = dataset_size // max(sa_distribution.values())
-data = plpy.execute("select * from {}".format(table_name)
-
-if max_l_without_loss < l_level:
-    data  = GD['supress_dataset'](data, sa_distribution)
-
+    error_message = "Can't anatomize with this l_level. Max possible l_level = {}".format(max_l)
+    plpy.error(error_message)
 
 
 # *****************************************************************************************
@@ -51,6 +40,27 @@ if create_qi_table == True:
 
 if create_sa_table == True:
     GD['create_sa_table'](sa_table_name, sa_name, sa_metadata)
+
+
+# *****************************************************************************************
+# Data supression. If distribution eligibility requirement is not met - suppress overpopulated SA attributes
+# *****************************************************************************************
+
+dataset_size = GD['fetch_table_size'](table_name)
+max_l_without_loss = dataset_size // max(sa_distribution.values())
+
+
+if max_l_without_loss < l_level:
+    temp_table_name = "temp_{}".format(table_name)
+    plpy.execute("create table {} as (select * from {})".format(temp_table_name, table_name))
+
+    _, sa_delta_hash = GD['calculate_data_loss'](l_level, dataset_size, sa_distribution)
+    GD['suppress_dataset'](temp_table_name, sa_delta_hash, sa_name)
+
+    data = plpy.execute("select * from {}".format(temp_table_name))
+    plpy.execute("drop table {}".format(temp_table_name))
+else:
+    data = plpy.execute("select * from {}".format(table_name))
 
 
 # *****************************************************************************************

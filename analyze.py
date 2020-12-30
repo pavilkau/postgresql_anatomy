@@ -30,9 +30,9 @@ for l in range(max_l_without_loss + 1, number_of_distinct_sa + 1):
 
     updated_dataset_size = dataset_size - data_loss
     number_of_groups = updated_dataset_size // l
-    
+
     plpy.info("L = {}".format(l) +
-        " -> No. of supressed records = {}".format(data_loss) +
+        " -> No. of suppressed records = {}".format(data_loss) +
         "; No. of groups = {}".format(number_of_groups))
 
 $$

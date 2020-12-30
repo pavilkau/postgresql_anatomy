@@ -1,13 +1,9 @@
-create or replace function _meta()
+create or replace function helper_functions()
 returns void as $$
 from collections import OrderedDict
 import random
 
 BUCKET_VALUE_IDX = 1
-
-
-# select distinct(income_category), count(income_category) from bank_churners group by income_category;
-# delete from bank_churners where id in (select id from bank_churners where income_category='Less than $40K' limit 20);
 
 def fetch_table_size(table_name):
     fetch_table_size_string = 'select count(*) from {}'.format(table_name)
@@ -69,10 +65,19 @@ GD["calculate_data_loss"] = calculate_data_loss
 
 
 
-def supress_dataset(table_name, sa_column_name, sa_deltas):
+#  delete from bank_churners where id in (select id from bank_churners where income_category='Less than $40K' limit 20);
+def suppress_dataset(table_name, sa_delta_hash, sa_column_name):
+    delete_records_string_base = "delete from {} where id in".format(table_name)
+    delete_records_string_base += " (select id from {} where {}=".format(table_name, sa_column_name)
+
+    plpy.info(sa_delta_hash)
+
+    for sa_name, rows_to_suppress in sa_delta_hash.items():
+        delete_records_string = delete_records_string_base + "'{}'  limit {})".format(sa_name, rows_to_suppress)
+        plpy.execute(delete_records_string)
 
 
-GD["supress_dataset"] = supress_dataset
+GD["suppress_dataset"] = suppress_dataset
 
 
 
@@ -120,7 +125,6 @@ def create_qi_table(table_name, column_names, column_metadata):
     table_creation_string = "create table {}(id serial unique, ".format(table_name)
     table_creation_string+= 'group_id integer not null, '
 
-    # plpy.info(qi_column_metadata.items())
     for column_name in column_names:
         metadata = column_metadata[column_name]
         table_creation_string+= column_name + ' ' + metadata['data_type']
@@ -253,8 +257,6 @@ def assign_residue_tuples(QIgroups, buckets, sa_name):
             if len(possible_groups_for_residue) < 1:
                 plpy.warning('Error: no possible QI groups')
 
-            # plpy.info(possible_groups_for_residue)
-
             # 12. assign t to a random QI-group in S
             chosen_group_number = random.choice(possible_groups_for_residue)
             QIgroups[chosen_group_number].append(residue_tuple)
@@ -343,3 +345,12 @@ GD["sa_insertion_template"] = sa_insertion_template
 
 $$
 language 'plpythonu';
+
+
+create or replace function init_functions()
+returns void as $$
+plpy.execute('select helper_functions()')
+$$
+language 'plpythonu';
+
+select init_functions();
