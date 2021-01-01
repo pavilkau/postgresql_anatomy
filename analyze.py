@@ -26,7 +26,7 @@ for l in range(1, max_l_without_loss + 1):
 number_of_distinct_sa = len(sa_distribution)
 
 for l in range(max_l_without_loss + 1, number_of_distinct_sa + 1):
-    data_loss, _ = GD['calculate_data_loss'](l, dataset_size, sa_distribution)
+    data_loss, _ = GD['calculate_data_loss'](l, dataset_size, sa_distribution.copy())
 
     updated_dataset_size = dataset_size - data_loss
     number_of_groups = updated_dataset_size // l
@@ -34,10 +34,12 @@ for l in range(max_l_without_loss + 1, number_of_distinct_sa + 1):
     plpy.info("L = {}".format(l) +
         " -> No. of suppressed records = {}".format(data_loss) +
         "; No. of groups = {}".format(number_of_groups))
+    
 
 $$
 LANGUAGE plpython3u;
 
 
-select analyze_dataset_for_l('bank_churners', 'income_category');
+-- select analyze_dataset_for_l('bank_churners', 'income_category');
 
+ select analyze_dataset_for_l('example_table', 'disease');

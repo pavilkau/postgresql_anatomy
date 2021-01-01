@@ -70,8 +70,6 @@ def suppress_dataset(table_name, sa_delta_hash, sa_column_name):
     delete_records_string_base = "delete from {} where id in".format(table_name)
     delete_records_string_base += " (select id from {} where {}=".format(table_name, sa_column_name)
 
-    plpy.info(sa_delta_hash)
-
     for sa_name, rows_to_suppress in sa_delta_hash.items():
         delete_records_string = delete_records_string_base + "'{}'  limit {})".format(sa_name, rows_to_suppress)
         plpy.execute(delete_records_string)
@@ -81,7 +79,7 @@ GD["suppress_dataset"] = suppress_dataset
 
 
 
-def fetch_column_metadata(schema, table_name, sa_name, specified_qi_columns):
+def fetch_column_metadata(schema, table_name, sa_name, specified_qi_columns, add_reference):
     plpy.info('fetching metadata')
 
     fetch_column_metadata_string = 'select column_name, column_default, is_nullable, data_type '\
@@ -98,6 +96,10 @@ def fetch_column_metadata(schema, table_name, sa_name, specified_qi_columns):
         column_name = row['column_name']
 
         if column_name == 'id':
+            if add_reference == True:
+                row['column_default'] = None
+                qi_column_metadata['reference_no'] = row
+
             continue
         if column_name == sa_name:
             sa_metadata = row
@@ -107,9 +109,12 @@ def fetch_column_metadata(schema, table_name, sa_name, specified_qi_columns):
 
     # If qi columns specified, keep only the specified ones
     if specified_qi_columns != ['*']:
-        for column_name in qi_column_metadata.keys():
+        for column_name in list(qi_column_metadata.keys()):
             if not column_name in specified_qi_columns:
-                qi_column_metadata.pop(column_name)
+                if add_reference == True:
+                    pass
+                else:
+                    qi_column_metadata.pop(column_name)
 
     return qi_column_metadata, sa_metadata
 
@@ -204,7 +209,7 @@ def create_qi_groups(buckets, l_level):
         #5. S = the set of l largest buckets; 6. for each bucket in S
         # Instead of assigning l largest buckets to variable S
         # buckets dictionary is iterated l times
-        for i, key in enumerate(buckets, start=1):
+        for i, key in enumerate(list(buckets), start=1):
             if i > l_level:
                 break
 
@@ -219,7 +224,6 @@ def create_qi_groups(buckets, l_level):
         buckets = OrderedDict(
             sorted(buckets.items(), key=lambda bucket: len(bucket[BUCKET_VALUE_IDX]), reverse=True)
         )
-
     return QIgroups, buckets
 
 GD["create_qi_groups"] = create_qi_groups
@@ -239,7 +243,6 @@ def assign_residue_tuples(QIgroups, buckets, sa_name):
             # 10. t (residue_tuple) = the only residue tuple of the bucket
             residue_tuple = residue_tuples[0]
             residue_tuple_sa = residue_tuple[sa_name]
-            # plpy.info(residue_tuple_sa)
 
             # 11. S` (possible_groups_for_residue) = the set of QI-groups that do not contain the As value t[d + 1]
             possible_groups_for_residue = []
@@ -268,20 +271,26 @@ GD["assign_residue_tuples"] = assign_residue_tuples
 
 
 
-def anatomize(QIgroups, qi_column_names, sa_name):
+def split(QIgroups, qi_column_names, sa_name):
     plpy.info('splitting qigroups into qi and sa lists')
-
+    
     list_of_qi_attributes = []
     list_of_sa = []
+   
     for group_number, tuples in QIgroups.items():
         current_group_sa_list = []
         sa_counts = {}
-
+        
         for tuple in tuples:
+           
             qi_attributes = [group_number]
-
+            
             for column_name in qi_column_names:
-                qi_attributes.append(tuple[column_name])
+                
+                if column_name == 'reference_no':
+                    qi_attributes.append(tuple['id'])
+                else:
+                    qi_attributes.append(tuple[column_name])
             list_of_qi_attributes.append(qi_attributes)
 
             current_group_sa_list.append(tuple[sa_name])
@@ -292,7 +301,7 @@ def anatomize(QIgroups, qi_column_names, sa_name):
             else:
                 sa_counts[sa] = 1
 
-        sa_keys = sa_counts.keys()
+        sa_keys = list(sa_counts.keys())
         random.shuffle(sa_keys)
 
         for sa in sa_keys:
@@ -300,7 +309,7 @@ def anatomize(QIgroups, qi_column_names, sa_name):
 
     return list_of_qi_attributes, list_of_sa
 
-GD["anatomize"] = anatomize
+GD["split"] = split
 
 
 

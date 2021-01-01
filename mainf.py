@@ -3,6 +3,7 @@ CREATE or replace FUNCTION mainfunc(
     sa_name text,
     qi_columns text[],
     l_level integer,
+    add_reference boolean default true,
     schema text default 'public',
     create_qi_table boolean default true,
     create_sa_table boolean default true,
@@ -11,7 +12,7 @@ CREATE or replace FUNCTION mainfunc(
 )
 RETURNS void AS $$
 # Usage:
-# select mainfunc('main_table', 'disease', '{"*"}', 2);
+
 # select mainfunc('bank_churners', 'income_category', '{"*"}', 5);
 
 plpy.info('\n\n\n\n')
@@ -32,8 +33,8 @@ if l_level > max_l:
 # Database preparation (fetch column types, create qi & sa tables)
 # *****************************************************************************************
 
-qi_column_metadata, sa_metadata = GD['fetch_column_metadata'](schema, table_name, sa_name, qi_columns)
-qi_column_names = qi_column_metadata.keys()
+qi_column_metadata, sa_metadata = GD['fetch_column_metadata'](schema, table_name, sa_name, qi_columns, add_reference)
+qi_column_names = list(qi_column_metadata.keys())
 
 if create_qi_table == True:
     GD['create_qi_table'](qi_table_name, qi_column_names, qi_column_metadata)
@@ -78,7 +79,7 @@ QIgroups, buckets = GD["create_qi_groups"](buckets, l_level)
 QIgroups = GD["assign_residue_tuples"](QIgroups, buckets, sa_name)
 
 # Split QIgroups into qi attributes list and sa list
-list_of_qi_attributes, list_of_sa = GD['anatomize'](QIgroups, qi_column_names, sa_name)
+list_of_qi_attributes, list_of_sa = GD['split'](QIgroups, qi_column_names, sa_name)
 
 
 # *****************************************************************************************
@@ -96,3 +97,6 @@ for row in list_of_sa:
 
 $$
 LANGUAGE plpython3u;
+
+-- select mainfunc('bank_churners', 'income_category', '{"*"}', 6);
+select mainfunc('example_table', 'disease', '{"*"}', 2);
