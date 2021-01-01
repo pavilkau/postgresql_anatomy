@@ -95,4 +95,4 @@ for row in list_of_sa:
         sql_sa_insertion_template.execute(row)
 
 $$
-LANGUAGE plpythonu;
+LANGUAGE plpython3u;

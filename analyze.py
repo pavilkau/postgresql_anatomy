@@ -4,7 +4,7 @@ CREATE or replace FUNCTION analyze_dataset_for_l(
 )
 RETURNS void AS $$
 plpy.info('\n\n\n')
-plpy.execute('select _meta()')
+# plpy.execute('select helper_functions()')
 
 # Fetch dataset size
 dataset_size = GD['fetch_table_size'](table_name)
@@ -36,7 +36,7 @@ for l in range(max_l_without_loss + 1, number_of_distinct_sa + 1):
         "; No. of groups = {}".format(number_of_groups))
 
 $$
-LANGUAGE plpythonu;
+LANGUAGE plpython3u;
 
 
 select analyze_dataset_for_l('bank_churners', 'income_category');

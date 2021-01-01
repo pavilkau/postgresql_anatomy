@@ -344,13 +344,13 @@ def sa_insertion_template(table_name, sa_column_metadata, sa_name):
 GD["sa_insertion_template"] = sa_insertion_template
 
 $$
-language 'plpythonu';
+language 'plpython3u';
 
 
 create or replace function init_functions()
 returns void as $$
 plpy.execute('select helper_functions()')
 $$
-language 'plpythonu';
+language 'plpython3u';
 
 select init_functions();
