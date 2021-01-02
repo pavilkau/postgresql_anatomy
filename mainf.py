@@ -12,7 +12,7 @@ CREATE or replace FUNCTION mainfunc(
 )
 RETURNS void AS $$
 # Usage:
-
+# select mainfunc('example_table', 'disease', '{"*"}', 2);
 # select mainfunc('bank_churners', 'income_category', '{"*"}', 5);
 
 plpy.info('\n\n\n\n')
@@ -98,5 +98,4 @@ for row in list_of_sa:
 $$
 LANGUAGE plpython3u;
 
--- select mainfunc('bank_churners', 'income_category', '{"*"}', 6);
-select mainfunc('example_table', 'disease', '{"*"}', 2);
+select mainfunc('bank_churners', 'income_category', '{"*"}', 6);
