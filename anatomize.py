@@ -65,6 +65,29 @@ language plpgsql;
 
 
 
+-- *****************************************************************************************
+-- Initialize the bank_churners table from csv
+-- *****************************************************************************************
+
+create or replace function init_csv_dataset(path_to_file text)
+returns void as $$
+begin
+    drop table if exists bank_churners;
+
+    create table bank_churners(
+        id serial,
+        age integer,
+        gender text,
+        dependent_count integer,
+        education text,
+        marital_status text,
+        income_category text
+    );
+
+    execute 'copy bank_churners(age, gender, dependent_count, education, marital_status, income_category) from '||quote_literal(path_to_file)||' delimiter '||quote_literal(',')||' csv header';
+end;
+$$
+language plpgsql;
 
 
 
