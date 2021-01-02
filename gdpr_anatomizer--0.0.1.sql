@@ -639,5 +639,3 @@ language plpgsql;
 
 
 -- select set_del_eq_class_trigger();
-
-
