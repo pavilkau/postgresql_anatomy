@@ -1,3 +1,8 @@
+
+-- *****************************************************************************************
+-- Helper functions
+-- *****************************************************************************************
+
 create or replace function helper_functions()
 returns void as $$
 from collections import OrderedDict
@@ -65,7 +70,6 @@ GD["calculate_data_loss"] = calculate_data_loss
 
 
 
-#  delete from bank_churners where id in (select id from bank_churners where income_category='Less than $40K' limit 20);
 def suppress_dataset(table_name, sa_delta_hash, sa_column_name):
     delete_records_string_base = "delete from {} where id in".format(table_name)
     delete_records_string_base += " (select id from {} where {}=".format(table_name, sa_column_name)
@@ -156,8 +160,7 @@ def create_sa_table(table_name, column_name, column_metadata):
 
     table_creation_string = "create table {}(id serial unique, ".format(table_name)
     table_creation_string+= 'group_id integer not null, '
-    table_creation_string+= column_name + ' ' + column_metadata['data_type'] + ' ' + 'not null, '
-    table_creation_string+= 'count integer default 1)'
+    table_creation_string+= column_name + ' ' + column_metadata['data_type'] + ' ' + 'not null)'
 
     plpy.execute(table_creation_string)
 
@@ -305,7 +308,7 @@ def split(QIgroups, qi_column_names, sa_name):
         random.shuffle(sa_keys)
 
         for sa in sa_keys:
-            list_of_sa.append([group_number, sa, sa_counts[sa]])
+            list_of_sa.append([group_number, sa])
 
     return list_of_qi_attributes, list_of_sa
 
@@ -344,9 +347,9 @@ GD["qi_insertion_template"] = qi_insertion_template
 def sa_insertion_template(table_name, sa_column_metadata, sa_name):
     plpy.info('generating sa insertion template')
 
-    sql_insert_string_base = 'insert into ' + table_name + '(group_id, ' + sa_name + ', count)'
-    sql_insert_string = sql_insert_string_base + ' values ($1, $2, $3)'
-    sql_insertion_template = plpy.prepare(sql_insert_string, ["integer", sa_column_metadata['data_type'], "integer"])
+    sql_insert_string_base = 'insert into ' + table_name + '(group_id, ' + sa_name + ')'
+    sql_insert_string = sql_insert_string_base + ' values ($1, $2)'
+    sql_insertion_template = plpy.prepare(sql_insert_string, ["integer", sa_column_metadata['data_type']])
 
     return sql_insertion_template
 
@@ -355,11 +358,193 @@ GD["sa_insertion_template"] = sa_insertion_template
 $$
 language 'plpython3u';
 
+select helper_functions();
 
-create or replace function init_functions()
-returns void as $$
-plpy.execute('select helper_functions()')
+
+
+-- *****************************************************************************************
+-- Analyze dataset
+-- *****************************************************************************************
+
+CREATE or replace FUNCTION analyze_dataset_for_l(
+    table_name text,
+    sa_column_name text
+)
+RETURNS void AS $$
+plpy.info('\n\n\n')
+
+# select analyze_dataset_for_l('bank_churners', 'income_category');
+# select analyze_dataset_for_l('example_table', 'disease');
+
+# Fetch dataset size
+dataset_size = GD['fetch_table_size'](table_name)
+plpy.info("Dataset size: {}".format(dataset_size))
+
+# Fetch the distribution of sa attributes (distinct sa + count)
+sa_distribution = GD['fetch_sa_distribution'](table_name, sa_column_name)
+
+# Print eligible l options
+max_l_without_loss = dataset_size // max(sa_distribution.values())
+plpy.info("Max L without data loss = {}".format(max_l_without_loss))
+
+for l in range(1, max_l_without_loss + 1):
+    number_of_groups = dataset_size // l
+    plpy.info("L = {}".format(l) + " -> No. of groups = {}".format(number_of_groups))
+
+
+# Calculate data loss for non eligible l options
+number_of_distinct_sa = len(sa_distribution)
+
+for l in range(max_l_without_loss + 1, number_of_distinct_sa + 1):
+    data_loss, _ = GD['calculate_data_loss'](l, dataset_size, sa_distribution.copy())
+
+    updated_dataset_size = dataset_size - data_loss
+    number_of_groups = updated_dataset_size // l
+
+    plpy.info("L = {}".format(l) +
+        " -> No. of suppressed records = {}".format(data_loss) +
+        "; No. of groups = {}".format(number_of_groups))
+    
+
 $$
-language 'plpython3u';
+LANGUAGE plpython3u;
 
-select init_functions();
+
+
+-- *****************************************************************************************
+-- Anatomy
+-- *****************************************************************************************
+
+CREATE or replace FUNCTION anatomy(
+    table_name text,
+    sa_name text,
+    qi_columns text[],
+    l_level integer,
+    add_reference boolean default true,
+    schema text default 'public',
+    create_qi_table boolean default true,
+    create_sa_table boolean default true,
+    qi_table_name text default 'qi_table',
+    sa_table_name text default 'sa_table'
+)
+RETURNS void AS $$
+# Usage:
+# select anatomy('example_table', 'disease', '{"*"}', 2);
+# select anatomy('bank_churners', 'income_category', '{"*"}', 5);
+
+plpy.info('\n\n\n\n')
+
+
+# *****************************************************************************************
+# L parameter eligibility check
+# *****************************************************************************************
+
+sa_distribution = GD['fetch_sa_distribution'](table_name, sa_name)
+max_l = len(sa_distribution)
+if l_level > max_l:
+    error_message = "Can't anatomize with this l_level. Max possible l_level = {}".format(max_l)
+    plpy.error(error_message)
+
+
+# *****************************************************************************************
+# Database preparation (fetch column types, create qi & sa tables)
+# *****************************************************************************************
+
+qi_column_metadata, sa_metadata = GD['fetch_column_metadata'](schema, table_name, sa_name, qi_columns, add_reference)
+qi_column_names = list(qi_column_metadata.keys())
+
+if create_qi_table == True:
+    GD['create_qi_table'](qi_table_name, qi_column_names, qi_column_metadata)
+
+if create_sa_table == True:
+    GD['create_sa_table'](sa_table_name, sa_name, sa_metadata)
+
+
+# *****************************************************************************************
+# Data supression. If distribution eligibility requirement is not met - suppress overpopulated SA attributes
+# *****************************************************************************************
+
+dataset_size = GD['fetch_table_size'](table_name)
+max_l_without_loss = dataset_size // max(sa_distribution.values())
+
+
+if max_l_without_loss < l_level:
+    temp_table_name = "temp_{}".format(table_name)
+    plpy.execute("create table {} as (select * from {})".format(temp_table_name, table_name))
+
+    _, sa_delta_hash = GD['calculate_data_loss'](l_level, dataset_size, sa_distribution)
+    GD['suppress_dataset'](temp_table_name, sa_delta_hash, sa_name)
+
+    data = plpy.execute("select * from {}".format(temp_table_name))
+    plpy.execute("drop table {}".format(temp_table_name))
+else:
+    data = plpy.execute("select * from {}".format(table_name))
+
+
+# *****************************************************************************************
+# Anatomizaton algorithm
+# *****************************************************************************************
+
+# Hash the tuples in T (rows) by their As (sensitive attr) values (each bucket per As value)
+# data = plpy.execute("select * from {}".format(table_name))
+buckets = GD["hash_tuples_into_buckets"](data, sa_name)
+
+# Create QI groups
+QIgroups, buckets = GD["create_qi_groups"](buckets, l_level)
+
+# Assign residue tuples to QIgroups
+QIgroups = GD["assign_residue_tuples"](QIgroups, buckets, sa_name)
+
+# Split QIgroups into qi attributes list and sa list
+list_of_qi_attributes, list_of_sa = GD['split'](QIgroups, qi_column_names, sa_name)
+
+
+# *****************************************************************************************
+# Data insertion part
+# *****************************************************************************************
+
+sql_qi_insertion_template = GD["qi_insertion_template"](qi_table_name, qi_column_metadata, qi_column_names)
+sql_sa_insertion_template = GD["sa_insertion_template"](sa_table_name, sa_metadata, sa_name)
+
+for row in list_of_qi_attributes:
+        sql_qi_insertion_template.execute(row)
+
+for row in list_of_sa:
+        sql_sa_insertion_template.execute(row)
+
+$$
+LANGUAGE plpython3u;
+
+
+
+-- *****************************************************************************************
+-- Trigger to delete equivalence class
+-- *****************************************************************************************
+
+CREATE or replace FUNCTION delete_eq_class() 
+  RETURNS trigger AS
+$$
+declare
+begin
+    execute 'delete from '||TG_TABLE_SCHEMA||'.'||TG_TABLE_NAME||' where group_id ='||old.group_id;
+    execute 'delete from '||TG_TABLE_SCHEMA||'.'||TG_ARGV[0]||' where group_id ='||old.group_id;
+    return old;
+END;
+$$
+language plpgsql;
+
+
+DROP TRIGGER IF EXISTS del_eq_class on "qi_table";
+
+create or replace function set_del_eq_class_trigger(qi_table_name text default 'qi_table', sa_table_name text default 'sa_table', schema_name text default 'public')
+returns void as $$
+begin
+    execute 'create trigger del_eq_class after delete on '||schema_name||'.'||qi_table_name||' for each row execute procedure delete_eq_class('||sa_table_name||')';
+end;
+$$
+language plpgsql;
+
+
+-- select set_del_eq_class_trigger();
+
+

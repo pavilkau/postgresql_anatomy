@@ -52,26 +52,3 @@ insert into example_table(age, fname, postal_code, disease) values
 
 insert into example_table(age, fname, postal_code, disease) values
 (13, 'Jimmy', '34512', 'ALS');
-
-
--- drop table if exists qi_table;
--- create table qi_table(
---     id SERIAL UNIQUE,
---     age integer,
---     fname varchar,
---     postal_code varchar,
---     group_id integer
--- );
-
--- drop table if exists sa_table;
--- create table sa_table(
---     id SERIAL UNIQUE,
---     disease varchar,
---     count integer,
---     group_id integer
--- );
-
--- SELECT 'DROP FUNCTION ' || oid::regprocedure
--- FROM   pg_proc
--- WHERE  proname = 'mainfunc'
--- AND    pg_function_is_visible(oid);
