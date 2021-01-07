@@ -33,6 +33,7 @@ Functions:
 Data Analyzer:
 select analyze_dataset(table_name, column_name);
     e.g.: select analyze_dataset('similarity_table', 'disease');
+    e.g.: select analyze_dataset('bank_churners', 'education');
 
 Anatomy:
     select anatomy(table_name, sa_name, qi_columns[], l_level, add_reference*, schema*, create_qi_table*, create_sa_table*, qi_table_name*, sa_table_name*)
@@ -41,7 +42,7 @@ Anatomy:
 
         e.g. select anatomy('similarity_table', 'disease', '{"*"}', 3);
         e.g. select anatomy('bank_churners', 'income_category', '{"age", "gender"}', 3);
-
+        e.g. select anatomy('bank_churners', 'education', '{"*"}', 3);
 
 Set deletion trigger:
 set_del_eq_class_trigger(qi_table_name*, sa_table_name*, schema_name*)
@@ -53,7 +54,8 @@ set_del_eq_class_trigger(qi_table_name*, sa_table_name*, schema_name*)
 Apply/remove SA tags:
 select apply_sa_tag(table_name, column_name, tag_value, sa_values[])
     e.g. select apply_sa_tag('similarity_table', 'disease', 'tag', '{"Arthritis", "ALS"}');
+    e.g. select apply_sa_tag('bank_churners', 'education', 'tag', '{"Uneducated", "College"}');
 
 select remove_sa_tags(table_name, column_name, tags[])
-    e.g. select remove_sa_tags('bank_churners', 'education', '{"rnd"}');
+    e.g. select remove_sa_tags('sa_table', 'education', '{"tag"}');
 
