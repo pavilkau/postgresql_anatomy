@@ -168,7 +168,11 @@ def suppress_dataset(table_name, sa_delta_hash, sa_column_name):
     delete_records_string_base += " (select id from {} where {}=".format(table_name, sa_column_name)
 
     for sa_name, rows_to_suppress in sa_delta_hash.items():
-        delete_records_string = delete_records_string_base + "'{}'  limit {})".format(sa_name, rows_to_suppress)
+
+        if sa_name[:1] == '_':
+            delete_records_string = delete_records_string_base + "like'{}%'  limit {})".format(sa_name, rows_to_suppress)
+        else:
+            delete_records_string = delete_records_string_base + "='{}'  limit {})".format(sa_name, rows_to_suppress)
         plpy.execute(delete_records_string)
 
 
@@ -501,6 +505,60 @@ for l in range(max_l_without_loss + 1, number_of_distinct_sa + 1):
 
 $$
 LANGUAGE plpython3u;
+
+
+
+-- *****************************************************************************************
+-- Apply / remove SA grouping tag
+-- *****************************************************************************************
+
+
+CREATE or replace FUNCTION apply_sa_tag(
+    table_name text,
+    sa_column_name text,
+    tag text, 
+    sa_values text[]
+)
+RETURNS void AS $$
+
+# select apply_sa_tag('example_table', 'disease', 'dos', '{"Cancer", "Asthma"}');
+# select apply_sa_tag('similarity_table', 'disease', 'can', '{"Leukemia", "Cancer", "Gastric_Cancer"}');
+
+query_string_base = "update {} set {} = regexp_replace({}, ".format(table_name, sa_column_name, sa_column_name)
+
+for val in sa_values:
+    find_value_regexp = "^{}".format(val)
+    adjusted_value = "_{}_".format(tag) + val
+    
+    replace_string = query_string_base + "'{}', '{}'".format(find_value_regexp, adjusted_value) + ')'
+
+    plpy.execute(replace_string)
+
+$$
+LANGUAGE plpython3u;
+
+
+
+
+CREATE or replace FUNCTION remove_sa_tags(
+    table_name text,
+    sa_column_name text,
+    tags text[]
+)
+RETURNS void AS $$
+# select remove_sa_tags('example_table', 'disease', '{"tag"}');
+
+query_string_base = "update {} set {} = regexp_replace({}, ".format(table_name, sa_column_name, sa_column_name)
+
+for tag in tags:
+    regexp= '^_{}_'.format(tag)
+    replace_string = query_string_base + "'{}', '')".format(regexp)
+    where_clause = " where {} like '_{}_%'".format(sa_column_name, tag)
+    query_string= replace_string + where_clause
+    plpy.execute(query_string)
+$$
+LANGUAGE plpython3u;
+
 
 
 
