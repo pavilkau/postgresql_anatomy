@@ -63,6 +63,93 @@ end;
 $$
 language plpgsql;
 
+select init_example_table();
+
+
+
+-- *****************************************************************************************
+-- Initialize the similarity table
+-- *****************************************************************************************
+
+create or replace function init_similarity_table()
+returns void as $$
+begin
+    drop table if exists similarity_table;
+
+    create table similarity_table(
+        id SERIAL UNIQUE,
+        age integer,
+        fname varchar not null,
+        postal_code varchar,
+        disease varchar(19)
+    );
+
+    insert into similarity_table(age, fname, postal_code, disease) values
+    (23, 'John', '12345', 'Cancer');
+
+    insert into similarity_table(age, fname, postal_code, disease) values
+    (65, 'James', '54674', 'Leukemia');
+
+    insert into similarity_table(age, fname, postal_code, disease) values
+    (32, 'Rita', '34532', 'Leukemia');
+
+    insert into similarity_table(age, fname, postal_code, disease) values
+    (31, 'Ruth', '45765', 'Gastric_Cancer');
+
+    insert into similarity_table(age, fname, postal_code, disease) values
+    (22, 'Adam', '34521', 'Influenza');
+
+    insert into similarity_table(age, fname, postal_code, disease) values
+    (11, 'Jeff', '98799', 'Hypertension');
+
+    insert into similarity_table(age, fname, postal_code, disease) values
+    (78, 'Paul', '34523', 'Arthritis');
+
+    insert into similarity_table(age, fname, postal_code, disease) values
+    (77, 'Lin', '12323', 'Hypertension');
+
+    insert into similarity_table(age, fname, postal_code, disease) values
+    (65, 'Alice', '45673', 'Hypertension');
+
+    insert into similarity_table(age, fname, postal_code, disease) values
+    (23, 'James', '12376', 'ALS');
+
+    insert into similarity_table(age, fname, postal_code, disease) values
+    (32, 'Oak', '54732', 'Hypertension');
+
+    insert into similarity_table(age, fname, postal_code, disease) values
+    (46, 'Darrel', '34521', 'Leukemia');
+
+    insert into similarity_table(age, fname, postal_code, disease) values
+    (55, 'Veronica', '68753', 'Arthritis');
+
+    insert into similarity_table(age, fname, postal_code, disease) values
+    (23, 'Luke', '45313', 'Cancer');
+
+    insert into similarity_table(age, fname, postal_code, disease) values
+    (54, 'Dinesh', '34512', 'Cancer');
+
+    insert into similarity_table(age, fname, postal_code, disease) values
+    (34, 'Wolfgang', '45313', 'Leukemia');
+
+    insert into similarity_table(age, fname, postal_code, disease) values
+    (52, 'Amanda', '34512', 'ALS');
+
+    insert into similarity_table(age, fname, postal_code, disease) values
+    (76, 'Lara', '45313', 'Hypertension');
+
+    insert into similarity_table(age, fname, postal_code, disease) values
+    (44, 'Greta', '34512', 'Leukemia');
+
+    insert into similarity_table(age, fname, postal_code, disease) values
+    (13, 'Amanda', '34512', 'Arthritis');
+end;
+$$
+language plpgsql;
+
+
+select init_similarity_table();
+
 
 
 -- *****************************************************************************************
@@ -120,7 +207,13 @@ def fetch_sa_distribution(table_name, sa_column_name):
 
     sa_distribution = {}
     for row in sa_distribution_object:
-        sa_distribution[row[sa_column_name]] = row['count']
+        if row[sa_column_name][:1] == '_':
+            if row[sa_column_name][:5] in sa_distribution:
+                sa_distribution[row[sa_column_name][:5]] += row['count']
+            else:
+                sa_distribution[row[sa_column_name][:5]] = row['count']
+        else:
+            sa_distribution[row[sa_column_name]] = row['count']
 
     return sa_distribution
 
@@ -141,13 +234,13 @@ def calculate_data_loss(l_level, dataset_size, sa_distribution):
 
         sa_overpopulation_delta = { k: v - max_possible_sa for (k, v) in overpopulated_sa.items() }
 
-        for k, v in sa_overpopulation_delta.items():
+        for k, v in sa_overpopulation_delta.copy().items():
             if k in sa_delta_totals:
                 sa_delta_totals[k] += v
             else:
                 sa_delta_totals[k] = v
 
-        for k, v in sa_distribution.items():
+        for k, v in sa_distribution.copy().items():
             if k in overpopulated_sa:
                 sa_distribution[k] = v - sa_overpopulation_delta[k]
             else:
@@ -165,7 +258,7 @@ GD["calculate_data_loss"] = calculate_data_loss
 
 def suppress_dataset(table_name, sa_delta_hash, sa_column_name):
     delete_records_string_base = "delete from {} where id in".format(table_name)
-    delete_records_string_base += " (select id from {} where {}=".format(table_name, sa_column_name)
+    delete_records_string_base += " (select id from {} where {} ".format(table_name, sa_column_name)
 
     for sa_name, rows_to_suppress in sa_delta_hash.items():
 
@@ -275,6 +368,9 @@ def hash_tuples_into_buckets(data, sa_name):
     for row in data:
         sensitive_attr = row[sa_name]
 
+        if sensitive_attr[:1] == '_':
+            sensitive_attr = sensitive_attr[:5]
+
         if sensitive_attr in buckets:
             buckets[sensitive_attr].append(row)
         else:
@@ -334,7 +430,7 @@ def assign_residue_tuples(QIgroups, buckets, sa_name):
     plpy.info('procesing residue assign')
 
     while len(buckets) > 0:
-        for key, residue_tuples in buckets.items():
+        for key, residue_tuples in buckets.copy().items():
 
             # this bucket has only one tuple; see Property 1
             if len(residue_tuples) > 1:
@@ -463,15 +559,13 @@ select helper_functions();
 -- Analyze dataset
 -- *****************************************************************************************
 
-CREATE or replace FUNCTION analyze_dataset_for_l(
+CREATE or replace FUNCTION analyze_dataset(
     table_name text,
     sa_column_name text
 )
 RETURNS void AS $$
 plpy.info('\n\n\n')
-
-# select analyze_dataset_for_l('bank_churners', 'income_category');
-# select analyze_dataset_for_l('example_table', 'disease');
+plpy.execute('select helper_functions()')
 
 # Fetch dataset size
 dataset_size = GD['fetch_table_size'](table_name)
@@ -480,6 +574,10 @@ plpy.info("Dataset size: {}".format(dataset_size))
 # Fetch the distribution of sa attributes (distinct sa + count)
 sa_distribution = GD['fetch_sa_distribution'](table_name, sa_column_name)
 
+for x in sa_distribution:
+    plpy.info(x, sa_distribution[x])
+
+plpy.info('\n')
 # Print eligible l options
 max_l_without_loss = dataset_size // max(sa_distribution.values())
 plpy.info("Max L without data loss = {}".format(max_l_without_loss))
@@ -521,8 +619,6 @@ CREATE or replace FUNCTION apply_sa_tag(
 )
 RETURNS void AS $$
 
-# select apply_sa_tag('example_table', 'disease', 'dos', '{"Cancer", "Asthma"}');
-# select apply_sa_tag('similarity_table', 'disease', 'can', '{"Leukemia", "Cancer", "Gastric_Cancer"}');
 
 query_string_base = "update {} set {} = regexp_replace({}, ".format(table_name, sa_column_name, sa_column_name)
 
@@ -546,7 +642,6 @@ CREATE or replace FUNCTION remove_sa_tags(
     tags text[]
 )
 RETURNS void AS $$
-# select remove_sa_tags('example_table', 'disease', '{"tag"}');
 
 query_string_base = "update {} set {} = regexp_replace({}, ".format(table_name, sa_column_name, sa_column_name)
 
@@ -579,13 +674,10 @@ CREATE or replace FUNCTION anatomy(
     sa_table_name text default 'sa_table'
 )
 RETURNS void AS $$
-# Usage:
-# select anatomy('example_table', 'disease', '{"*"}', 2);
-# select anatomy('bank_churners', 'income_category', '{"*"}', 5);
 
 plpy.info('\n\n\n\n')
 
-
+plpy.execute('select helper_functions()')
 # *****************************************************************************************
 # L parameter eligibility check
 # *****************************************************************************************
