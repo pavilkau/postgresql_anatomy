@@ -1,4 +1,4 @@
-# gdpr_anatomzer postgresl extension
+# PostgreSQL anatomy extension
 
 ## Dependencies
 
