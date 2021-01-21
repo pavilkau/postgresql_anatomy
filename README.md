@@ -1,15 +1,11 @@
 # PostgreSQL anatomy extension
+This extension implements the Anatomy privacy algorithm along with other helpful functions like dataset analyser and data supresser.
 
 ## Dependencies
 
 plpython:
 sudo apt-get install postgresql-plpython3-12
 in psql: create extension plpython3u;
-
-dataset parser:
-pip3 needed: sudo apt install python3-pip
-pip3 install pandas
-
 
 ## Setup:
 
