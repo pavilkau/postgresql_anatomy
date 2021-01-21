@@ -10,10 +10,6 @@ dataset parser:
 pip3 needed: sudo apt install python3-pip
 pip3 install pandas
 
-postgresql_anonymizer:
-sudo apt-get install build-essential
-sudo apt install pgxnclient postgresql-server-dev-12
-sudo pgxn install postgresql_anonymizer
 
 ## Setup:
 
@@ -21,16 +17,16 @@ from scratch:
 sudo -u postgres -i
 psql
 create role username with login superuser
-create database gdpr_ba with owner=username
+create database test with owner=username
 exit
 
 
 sudo make install
-psql gdpr_ba
+psql test
 create extension gdpr_anatomizer;
 
 initialize example table: init_example_table();
-initialize bank churners dataset: select init_csv_dataset('/home/chridcrow/anatomy_gdpr_ba/output.csv');
+initialize bank churners dataset: select init_csv_dataset('/home/user/postgresql_anatomy/output.csv');
 
 
 ## Example: anatomy with 3 - diversity
