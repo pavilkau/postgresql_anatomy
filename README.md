@@ -1,5 +1,5 @@
 # PostgreSQL anatomy extension
-This extension implements the Anatomy privacy algorithm along with other helpful functions like dataset analyser and data supresser.
+This is a prototype for a PostgreSQL extension that implements the Anatomy privacy algorithm along with other helpful functions like dataset analyser and data supresser.
 
 ## Dependencies
 
